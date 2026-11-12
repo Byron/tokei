@@ -236,6 +236,14 @@ $ tokei ./foo --input ./stats.json
 
 ## Options
 
+Rust tests are counted separately by default. Rust files under `tests/`, inline
+`#[cfg(test)]` items, and `#[test]` functions appear as a `Rust tests` child row
+beneath Rust. Disable this with `--rust-tests=false` or
+`rust_tests = false` in `tokei.toml`. Use `--rust-tests` to enable it explicitly.
+Namespaced test attributes such as `#[tokio::test]` are also recognized. Detection
+uses these attributes and the `tests/` directory convention; it does not evaluate
+compound `cfg` expressions or custom Cargo test targets.
+
 ```
 USAGE:
     tokei [FLAGS] [OPTIONS] [--] [input]...
@@ -265,6 +273,7 @@ OPTIONS:
     -o, --output <output>         Outputs Tokei in a specific format. Compile with additional features for more format
                                   support. [possible values: cbor, json, yaml]
     -s, --sort <sort>             Sort languages based on column [possible values: files, lines, blanks, code, comments]
+        --rust-tests[=<bool>]     Count Rust tests separately (enabled by default; false to disable).
     -t, --type <types>            Filters output by language type, separated by a comma. i.e. -t=Rust,Markdown
 
 ARGS:

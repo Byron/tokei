@@ -3,6 +3,7 @@ use std::{
     fmt,
     fs::File,
     io::{self, Read},
+    ops::Range,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -53,7 +54,17 @@ impl LanguageType {
 
         let mut stats = Report::new(path);
 
-        stats += self.parse_from_slice(text, config);
+        if self == Rust
+            && config.rust_tests != Some(false)
+            && super::rust_tests::is_test_path(&stats.name)
+        {
+            stats
+                .stats
+                .blobs
+                .insert(RustTest, RustTest.parse_from_slice(text, config));
+        } else {
+            stats += self.parse_from_slice(text, config);
+        }
 
         Ok(stats)
     }
@@ -81,6 +92,13 @@ impl LanguageType {
             syntax_mut
         };
 
+        if self == Rust && config.rust_tests != Some(false) {
+            let tests = super::rust_tests::ranges(text);
+            if !tests.is_empty() {
+                return self.parse_lines(config, text, CodeStats::new(), syntax, &tests);
+            }
+        }
+
         if let Some(end) = syntax.shared.important_syntax.find(text).and_then(|m| {
             // Get the position of the last line before the important
             // syntax.
@@ -99,7 +117,7 @@ impl LanguageType {
                 "Using Simple Parse on {:?}",
                 String::from_utf8_lossy(skippable_text)
             );
-            let parse_lines = move || self.parse_lines(config, rest, CodeStats::new(), syntax);
+            let parse_lines = move || self.parse_lines(config, rest, CodeStats::new(), syntax, &[]);
             let simple_parse = move || {
                 LineIter::new(b'\n', skippable_text)
                     .par_bridge()
@@ -128,7 +146,7 @@ impl LanguageType {
             stats.comments += comments;
             stats
         } else {
-            self.parse_lines(config, text, CodeStats::new(), syntax)
+            self.parse_lines(config, text, CodeStats::new(), syntax, &[])
         }
     }
 
@@ -137,12 +155,22 @@ impl LanguageType {
         self,
         config: &Config,
         lines: &[u8],
-        mut stats: CodeStats,
+        mut result: CodeStats,
         mut syntax: SyntaxCounter,
+        tests: &[Range<usize>],
     ) -> CodeStats {
         let mut stepper = LineStep::new(b'\n', 0, lines.len());
+        let mut tests = tests.iter().peekable();
 
         while let Some((start, end)) = stepper.next(lines) {
+            while tests.peek().is_some_and(|range| range.end <= start) {
+                tests.next();
+            }
+            let stats = if tests.peek().is_some_and(|range| range.contains(&start)) {
+                result.blobs.entry(RustTest).or_default()
+            } else {
+                &mut result
+            };
             let line = &lines[start..end];
             // FORTRAN has a rule where it only counts as a comment if it's the
             // first character in the column, so removing starting whitespace
@@ -154,7 +182,7 @@ impl LanguageType {
             };
             trace!("{}", String::from_utf8_lossy(line));
 
-            if syntax.try_perform_single_line_analysis(line, &mut stats) {
+            if syntax.try_perform_single_line_analysis(line, stats) {
                 continue;
             }
 
@@ -211,7 +239,7 @@ impl LanguageType {
             }
         }
 
-        stats
+        result
     }
 
     fn parse_jupyter(&self, json: &[u8], config: &Config) -> Option<CodeStats> {

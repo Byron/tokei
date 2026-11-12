@@ -44,6 +44,7 @@ pub struct Cli {
     pub no_ignore_parent: bool,
     pub no_ignore_dot: bool,
     pub no_ignore_vcs: bool,
+    pub rust_tests: Option<bool>,
     pub output: Option<Format>,
     pub streaming: Option<Streaming>,
     pub print_languages: bool,
@@ -104,6 +105,15 @@ impl Cli {
                     .long("hidden")
                     .action(ArgAction::SetTrue)
                     .help("Count hidden files."),
+            )
+            .arg(
+                Arg::new("rust_tests")
+                    .long("rust-tests")
+                    .num_args(0..=1)
+                    .require_equals(true)
+                    .default_missing_value("true")
+                    .value_parser(value_parser!(bool))
+                    .help("Count Rust tests separately (enabled by default; --rust-tests=false to disable)."),
             )
             .arg(
                 Arg::new("input")
@@ -243,6 +253,7 @@ impl Cli {
         let no_ignore_parent = matches.get_flag("no_ignore_parent");
         let no_ignore_dot = matches.get_flag("no_ignore_dot");
         let no_ignore_vcs = matches.get_flag("no_ignore_vcs");
+        let rust_tests = matches.get_one::<bool>("rust_tests").copied();
         let print_languages = matches.get_flag("languages");
         let verbose = matches.get_count("verbose") as u64;
         let compact = matches.get_flag("compact");
@@ -291,6 +302,7 @@ impl Cli {
             no_ignore_parent,
             no_ignore_dot,
             no_ignore_vcs,
+            rust_tests,
             output,
             streaming,
             print_languages,
@@ -395,8 +407,11 @@ impl Cli {
     /// * `no_ignore_parent`
     /// * `no_ignore_dot`
     /// * `no_ignore_vcs`
+    /// * `rust_tests`
     /// * `types`
     pub fn override_config(&mut self, mut config: Config) -> Config {
+        config.rust_tests = self.rust_tests.or(config.rust_tests);
+
         config.hidden = if self.hidden {
             Some(true)
         } else {
@@ -432,15 +447,21 @@ impl Cli {
                 println!("{}", serde_json::json!({"language": l.name(), "stats": e}));
             }),
             Some(Streaming::Simple) => Some(|l: LanguageType, e| {
-                println!(
-                    "{:>LANGUAGE_COLUMN_WIDTH$} {:<PATH_COLUMN_WIDTH$} {:>LINES_COLUMN_WIDTH$} {:>CODE_COLUMN_WIDTH$} {:>COMMENTS_COLUMN_WIDTH$} {:>BLANKS_COLUMN_WIDTH$}",
-                    l.name(),
-                    e.name.to_string_lossy().to_string(),
-                    e.stats.lines(),
-                    e.stats.code,
-                    e.stats.comments,
-                    e.stats.blanks
-                );
+                let print = |language: LanguageType, stats: &tokei::CodeStats| {
+                    println!(
+                        "{:>LANGUAGE_COLUMN_WIDTH$} {:<PATH_COLUMN_WIDTH$} {:>LINES_COLUMN_WIDTH$} {:>CODE_COLUMN_WIDTH$} {:>COMMENTS_COLUMN_WIDTH$} {:>BLANKS_COLUMN_WIDTH$}",
+                        language.name(),
+                        e.name.to_string_lossy(),
+                        stats.lines(),
+                        stats.code,
+                        stats.comments,
+                        stats.blanks
+                    );
+                };
+                print(l, &e.stats);
+                if let Some(tests) = e.stats.blobs.get(&LanguageType::RustTest) {
+                    print(LanguageType::RustTest, &tests.summarise());
+                }
             }),
             _ => None,
         };

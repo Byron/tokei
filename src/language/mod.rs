@@ -1,6 +1,7 @@
 mod embedding;
 pub mod language_type;
 pub mod languages;
+mod rust_tests;
 mod syntax;
 
 use std::{collections::BTreeMap, mem, ops::AddAssign};

@@ -340,6 +340,11 @@ impl<W: Write> Printer<W> {
                 self.print_language(language, name.name())?;
                 if has_children {
                     self.print_language_total(language)?;
+                } else if let Some(reports) = language.children.get(&LanguageType::RustTest) {
+                    self.print_code_stats(
+                        LanguageType::RustTest,
+                        &reports.iter().map(|r| r.stats.clone()).collect::<Vec<_>>(),
+                    )?;
                 }
 
                 if self.list_files {
@@ -351,6 +356,13 @@ impl<W: Write> Printer<W> {
                     if compact {
                         for &report in &reports {
                             writeln!(self.writer, "{:1$}", report, self.path_length)?;
+                            if let Some(tests) = report.stats.blobs.get(&LanguageType::RustTest) {
+                                self.print_report(
+                                    LanguageType::RustTest,
+                                    &tests.summarise(),
+                                    language.inaccurate,
+                                )?;
+                            }
                         }
                     } else {
                         let (a, b): (Vec<&Report>, Vec<&Report>) =
@@ -434,11 +446,15 @@ impl<W: Write> Printer<W> {
         subtotal.stats.blanks += report.stats.blanks;
 
         for (language_type, stats) in &report.stats.blobs {
-            self.print_report(*language_type, stats, inaccurate)?;
+            if *language_type == LanguageType::RustTest {
+                self.print_report(*language_type, &stats.summarise(), inaccurate)?;
+            } else {
+                self.print_report(*language_type, stats, inaccurate)?;
+            }
             subtotal.stats += stats.summarise();
         }
 
-        self.print_report_with_name(report)?;
+        self.print_report_with_name(&subtotal)?;
 
         Ok(())
     }

@@ -41,6 +41,9 @@ pub struct Config {
     /// Whether to treat doc strings in languages as comments.  *Default:*
     /// `false`.
     pub treat_doc_strings_as_comments: Option<bool>,
+    /// Count Rust `#[cfg(test)]` and `#[test]` items, and Rust files under
+    /// `tests/`, separately as `Rust tests`. *Default:* `true`.
+    pub rust_tests: Option<bool>,
     /// Sort languages. *Default:* `None`.
     pub sort: Option<Sort>,
     /// Filters languages searched to just those provided. E.g. A directory
@@ -118,6 +121,9 @@ impl Config {
             treat_doc_strings_as_comments: current_dir.treat_doc_strings_as_comments.or(home_dir
                 .treat_doc_strings_as_comments
                 .or(conf_dir.treat_doc_strings_as_comments)),
+            rust_tests: current_dir
+                .rust_tests
+                .or(home_dir.rust_tests.or(conf_dir.rust_tests)),
             sort: current_dir.sort.or(home_dir.sort.or(conf_dir.sort)),
             types: current_dir.types.or(home_dir.types.or(conf_dir.types)),
             for_each_fn: current_dir
@@ -136,6 +142,30 @@ impl Config {
                 .no_ignore_vcs
                 .or(home_dir.no_ignore_vcs.or(conf_dir.no_ignore_vcs)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+
+    #[test]
+    fn rust_tests_config_preserves_explicit_values() {
+        let dir = tempfile::tempdir().unwrap();
+        for value in [true, false] {
+            std::fs::write(
+                dir.path().join("tokei.toml"),
+                format!("rust_tests = {value}"),
+            )
+            .unwrap();
+            assert_eq!(
+                Config::get_config(dir.path().to_path_buf())
+                    .unwrap()
+                    .rust_tests,
+                Some(value)
+            );
+        }
+        assert_eq!(toml::from_str::<Config>("").unwrap().rust_tests, None);
     }
 }
 

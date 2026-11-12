@@ -15,6 +15,7 @@ pub struct FuzzInput<'a> {
 pub fn parse_from_slice(input: FuzzInput, check_total: bool) {
     let config = &Config {
         treat_doc_strings_as_comments: Some(input.treat_doc_strings_as_comments),
+        rust_tests: None,
 
         // these options don't impact the behaviour of parse_from_slice:
         columns: None,

@@ -167,7 +167,7 @@ impl<'a> RegexCache<'a> {
                 SimpleCapture::make_capture(&STARTING_MARKDOWN_REGEX, lines, start, end)
                     .map(RegexFamily::Markdown)
             }
-            LanguageType::Rust => Some(RegexFamily::Rust),
+            LanguageType::Rust | LanguageType::RustTest => Some(RegexFamily::Rust),
             LanguageType::LinguaFranca => {
                 SimpleCapture::make_capture(&STARTING_LF_BLOCK_REGEX, lines, start, end)
                     .map(RegexFamily::LinguaFranca)
